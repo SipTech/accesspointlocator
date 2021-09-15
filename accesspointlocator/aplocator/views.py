@@ -1,12 +1,15 @@
 from datetime import datetime, timedelta
 from pprint import pprint
 
+import requests
+from django.conf import settings
 from django.shortcuts import render
 from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 import json
 from .access_point_serializer import AccessPointSerializer
+from django.core.cache import cache
 
 
 @api_view(['GET', 'POST'])
@@ -15,8 +18,10 @@ def ap_location(request):
     if request.method == 'POST':
         pay_load = {}
         ap_list = {}
+        cache_data = {}
         locations = {}
         resolution_payload = []
+        response_payload = []
         n_counter = 0
 
         try:
@@ -31,22 +36,23 @@ def ap_location(request):
                     #print("AP type is ---> {0}".format(type(ap)))
                     serializer = AccessPointSerializer(data=ap)
                     if serializer.is_valid():
-                        pay_load["macAddress"] = serializer.validated_data["bssid"]
-                        pay_load["signalStrength"] = serializer.validated_data["rssi"]
-                        pay_load["channel"] = serializer.validated_data["channel"]
-                        pay_load["ssid"] = serializer.validated_data["ssid"]
-                        pay_load["age"] = get_timestamp_age(serializer.validated_data["timestamp"])
-                        resolution_payload.append(pay_load)
-                        pay_load = {}
+                        ap = serializer.validated_data
+                        cache_data = {
+                            "considerIp": "false",
+                            "wifiAccessPoints": [
+                                {
+                                    'macAddress': ap['bssid'],
+                                    'signalStrength': ap['rssi'],
+                                    'channel': ap['channel'],
+                                    'ssid': ap['ssid'],
+                                    'age': get_timestamp_age(ap['timestamp'])
+                                },
+                            ]
+                        }
+                        cache_name = ap['bssid'] + '_' + ap['timestamp']
 
-                        # TODO Add caching for Geolocation API Calls
-                        # TODO call Geolocation Api to get location
-                        # TODO add all Geolocation responses into the locations dict() instead of validated_data
-                        n_counter += 1
-        # print(resolution_payload)
-        ap_list["wifiAccessPoints"] = resolution_payload
+                        ap_list[cache_name] = cache.get_or_set(cache_name, call_geolocator(cache_data), 60 * 1)
         return Response(ap_list, status=status.HTTP_201_CREATED)
-        #return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     else:
         Response(status.HTTP_400_BAD_REQUEST)
 
@@ -54,5 +60,11 @@ def ap_location(request):
 def get_timestamp_age(timestamp):
     timestamp = int(float(timestamp))
     date = datetime.utcfromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
-    # print(date)
     return int(float((datetime.now() - datetime.strptime(date, '%Y-%m-%d %H:%M:%S')) / timedelta(1)))
+
+def call_geolocator(pay_load):
+    api_url = "https://www.googleapis.com/geolocation/v1/geolocate?key="+settings.GEOLOCATION_KEY
+    headers = {"Content-Type": "application/json"}
+    response = requests.post(api_url, json=pay_load, headers=headers)
+    print(response.content)
+    return response.content
