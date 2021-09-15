@@ -9,25 +9,36 @@ https://docs.djangoproject.com/en/3.2/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/3.2/ref/settings/
 """
-
+import json
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+CONF_DIR = '/etc/django-conf-files/accesspointlocator.json'
+
+with open(CONF_DIR, mode='r') as conf_file:
+    config = json.loads(conf_file.read())
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/3.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-ptpr)=n1i=65m!739h)iclx*u%v^l%k(59vp@#+_+rt7v^s0@c'
+SECRET_KEY = config['SECRET_KEY']
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+# ALLOWED_HOSTS = []
+if config['DEBUG'] == 'True':
+    DEBUG = True
+else:
+    DEBUG = False
+
+ALLOWED_HOSTS = [config['ALLOWED_HOSTS']]
+
 DATA_UPLOAD_MAX_MEMORY_SIZE = 50000000
-GEOLOCATION_KEY = "AIzaSyCCK6hPzvUI1_XbDCV4pC1HN_6bneUejYc"
+GEOLOCATION_KEY = config['GEOLOCATION_KEY']
 
 
 # Application definition
